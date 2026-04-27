@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin version="1.0">
+  <feature name="UniWebView">
+    <!-- WebView 组件 -->
+    <component name="UniWebView" class="uni.dcloud.io.uniplugin_webview.WebViewComponent"/>
+    <!-- WebView 模块 -->
+    <module name="UniWebViewModule" class="uni.dcloud.io.uniplugin_webview.WebViewModule"/>
+  </feature>
+</plugin>

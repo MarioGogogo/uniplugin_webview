@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android">
+  <name>UniWebView</name>
+  <description>Android WebView 原生插件，支持在 uni-app 中嵌入原生 WebView 组件，提供 JS Bridge 双向通信、Cookie 管理、缓存管理等功能</description>
+
+  <!-- 权限配置 -->
+  <feature name="UniWebView">
+    <param name="android-package" value="uni.dcloud.io.uniplugin_webview.WebViewComponent"/>
+    <param name="android-module" value="uni.dcloud.io.uniplugin_webview.WebViewModule"/>
+  </feature>
+
+  <!-- 权限声明 -->
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+</widget>

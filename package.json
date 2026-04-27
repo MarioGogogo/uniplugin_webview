@@ -1,0 +1,47 @@
+{
+  "name": "uniplugin-webview",
+  "version": "1.0.0",
+  "description": "Android WebView 原生插件，支持在 uni-app 中嵌入原生 WebView 组件，提供 JS Bridge 双向通信、Cookie 管理、缓存管理等功能",
+  "main": "",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "uni-app",
+    "uniplugin",
+    "android",
+    "webview",
+    "jsbridge"
+  ],
+  "author": "",
+  "license": "MIT",
+  "uni-app": {
+    "version": "1.0.0",
+    "format": "native",
+    "minVersion": {
+      "uniAppX": "3.99",
+      "uniAppZ": "3.99"
+    },
+    "plugins": {
+      "android": {
+        "plugins": [
+          {
+            "type": "component",
+            "name": "UniWebView",
+            "class": "uni.dcloud.io.uniplugin_webview.WebViewComponent",
+            "permissions": [
+              "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+              "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>"
+            ]
+          },
+          {
+            "type": "module",
+            "name": "UniWebViewModule",
+            "class": "uni.dcloud.io.uniplugin_webview.WebViewModule"
+          }
+        ]
+      }
+    }
+  }
+}
