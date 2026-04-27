@@ -27,6 +27,7 @@ WebView 原生插件，包含 **WebView 组件** 和 **WebView 模块** 两部�
 
 ### Implementation
 - `com.alibaba:fastjson:1.2.83` - JSON 处理
+- `webview-x5-release.aar` - 腾讯 X5 内核（TBS）
 
 ---
 
@@ -282,6 +283,59 @@ window.receiveFromApp = function(data) {
 
 ---
 
+## X5 内核 WebView
+
+插件同时提供基于腾讯 TBS X5 内核的 WebView 组件，API 与系统 WebView 完全一致。
+
+### 为什么使用 X5 内核？
+
+| 对比项 | 系统 WebView | X5 内核 |
+|--------|-------------|---------|
+| H5 兼容性 | 依赖系统版本，碎片化严重 | 统一内核，兼容性更好 |
+| 视频播放 | 格式支持有限 | 支持更多格式，支持全屏 |
+| 文件下载 | 部分机型不稳定 | 下载更稳定 |
+| 夜间模式 | 需自行实现 | 原生支持 |
+| 内核升级 | 跟随系统 | 可独立更新 |
+
+### 前端使用方式
+
+**组件**：在 nvue 页面中将 `UniWebView` 替换为 `X5WebView`
+
+```vue
+<X5WebView
+  :src="url"
+  @onpagestart="onPageStart"
+  @onpagefinish="onPageFinish"
+  @onpageerror="onPageError"
+  @onjsmessage="onJsMessage"
+  @onprogress="onProgress"
+/>
+```
+
+**模块**：
+```javascript
+const x5WebView = uni.requireNativePlugin('X5WebViewModule')
+
+// 获取 X5 内核信息
+x5WebView.getX5Info(res => {
+  console.log('是否使用 X5:', res.isX5)
+  console.log('X5 版本:', res.version)
+})
+
+// 其他 API 与 UniWebViewModule 完全一致
+x5WebView.clearAllCache(res => {
+  console.log(res.message)
+})
+```
+
+### X5WebViewModule 特有 API
+
+| 方法 | 参数 | 回调返回 | 说明 |
+|------|------|----------|---|
+| `getX5Info(callback)` | - | `{isX5, version, sdkVersion, canSupportVideo}` | 获取 X5 内核状态 |
+
+---
+
 ## 注意事项
 
 1. **组件只能用于 nvue 页面**，普通 `.vue` 页面无法使用
@@ -302,5 +356,7 @@ window.receiveFromApp = function(data) {
 | `plugin.xml` | UniPlugin 插件配置 |
 | `_config.xml` | 插件描述文件 |
 | `AndroidManifest.xml` | 模块清单 |
-| `WebViewModule.java` | 全局模块 API 入口 |
-| `WebViewComponent.java` | 组件 API 入口（核心文件） |
+| `WebViewModule.java` | 系统 WebView 全局模块 API |
+| `WebViewComponent.java` | 系统 WebView 组件 API |
+| `X5WebViewModule.java` | X5 内核全局模块 API |
+| `X5WebViewComponent.java` | X5 内核组件 API |

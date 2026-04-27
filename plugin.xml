@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <plugin version="1.0">
   <feature name="UniWebView">
-    <!-- WebView 组件 -->
+    <!-- 系统 WebView 组件 -->
     <component name="UniWebView" class="uni.dcloud.io.uniplugin_webview.WebViewComponent"/>
-    <!-- WebView 模块 -->
+    <!-- 系统 WebView 模块 -->
     <module name="UniWebViewModule" class="uni.dcloud.io.uniplugin_webview.WebViewModule"/>
+  </feature>
+
+  <feature name="X5WebView">
+    <!-- X5 内核 WebView 组件 -->
+    <component name="X5WebView" class="uni.dcloud.io.uniplugin_webview.X5WebViewComponent"/>
+    <!-- X5 内核 WebView 模块 -->
+    <module name="X5WebViewModule" class="uni.dcloud.io.uniplugin_webview.X5WebViewModule"/>
   </feature>
 </plugin>
