@@ -39,6 +39,30 @@
             "type": "module",
             "name": "UniWebViewModule",
             "class": "uni.dcloud.io.uniplugin_webview.WebViewModule"
+          },
+          {
+            "type": "component",
+            "name": "X5WebView",
+            "class": "uni.dcloud.io.uniplugin_webview.X5WebViewComponent",
+            "permissions": [
+              "<uses-permission android:name=\"android.permission.INTERNET\"/>",
+              "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>"
+            ]
+          },
+          {
+            "type": "module",
+            "name": "X5WebViewModule",
+            "class": "uni.dcloud.io.uniplugin_webview.X5WebViewModule"
+          },
+          {
+            "type": "module",
+            "name": "X5LocalInstallModule",
+            "class": "uni.dcloud.io.uniplugin_webview.X5LocalInstallModule",
+            "permissions": [
+              "<uses-permission android:name=\"android.permission.WRITE_EXTERNAL_STORAGE\"/>",
+              "<uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\"/>",
+              "<uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\"/>"
+            ]
           }
         ]
       }

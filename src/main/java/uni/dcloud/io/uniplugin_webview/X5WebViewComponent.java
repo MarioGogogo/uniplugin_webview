@@ -16,6 +16,7 @@ import com.tencent.smtt.export.external.interfaces.JsResult;
 import com.tencent.smtt.export.external.interfaces.WebResourceError;
 import com.tencent.smtt.export.external.interfaces.WebResourceRequest;
 import com.tencent.smtt.sdk.CookieManager;
+import com.tencent.smtt.sdk.QbSdk;
 import com.tencent.smtt.sdk.WebChromeClient;
 import com.tencent.smtt.sdk.WebSettings;
 import com.tencent.smtt.sdk.WebView;
@@ -44,7 +45,7 @@ import io.dcloud.feature.uniapp.UniSDKInstance;
 public class X5WebViewComponent extends UniComponent<FrameLayout> {
 
     // ===== 调试环境开关 =====
-    private static final boolean IS_ANDROID_STUDIO = false;
+    private static final boolean IS_ANDROID_STUDIO = true;
     private static final String ASSETS_WWW_PATH = "file:///android_asset/apps/__UNI__BE1144F/www/";
     // ====================
 
@@ -594,6 +595,32 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                 }
             } catch (Exception e) {
                 e.printStackTrace();
+            }
+        }
+
+        /**
+         * 获取 X5 内核版本信息
+         * H5 调用方式：window.UniWebView.getX5Version()
+         *
+         * @return JSON 字符串，格式：{ "isX5": true, "version": 46141, "sdkVersion": 46141 }
+         */
+        @android.webkit.JavascriptInterface
+        public String getX5Version() {
+            try {
+                Context ctx = mWebView != null ? mWebView.getContext() : null;
+                int version = QbSdk.getTbsVersion(ctx);
+                boolean isX5 = version > 0;
+
+                JSONObject result = new JSONObject();
+                result.put("isX5", isX5);
+                result.put("version", version);
+                result.put("sdkVersion", version);
+                result.put("canSupportVideo", QbSdk.canOpenWebPlus(ctx));
+
+                return result.toJSONString();
+            } catch (Exception e) {
+                Log.e(TAG, "getX5Version 异常: " + e.getMessage());
+                return "{\"isX5\":false,\"version\":0,\"error\":\"" + e.getMessage() + "\"}";
             }
         }
     }

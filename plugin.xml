@@ -13,4 +13,9 @@
     <!-- X5 内核 WebView 模块 -->
     <module name="X5WebViewModule" class="uni.dcloud.io.uniplugin_webview.X5WebViewModule"/>
   </feature>
+
+  <feature name="X5LocalInstall">
+    <!-- X5 离线内核安装模块 -->
+    <module name="X5LocalInstallModule" class="uni.dcloud.io.uniplugin_webview.X5LocalInstallModule"/>
+  </feature>
 </plugin>

@@ -30,4 +30,6 @@ dependencies {
 
     // X5 内核 (Tencent TBS) - 使用 compileOnly，实际打包由 app 模块负责
     compileOnly fileTree(dir: '../app/libs', include: ['webview-x5-release.aar'])
+
+    // TBS SDK 已由 webview-x5-release.aar 提供，无需额外引入
 }
