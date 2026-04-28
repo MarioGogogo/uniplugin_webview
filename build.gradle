@@ -19,6 +19,10 @@ android {
     }
 }
 
+// 打 AAR 给 uni-app 时加 -PbuildAar=true
+// 例: ./gradlew :uniplugin_webview:assembleRelease -PbuildAar=true
+def buildAar = project.hasProperty('buildAar') && project.buildAar.toBoolean()
+
 dependencies {
     // UniApp 核心库 - 使用 compileOnly 避免重复打包
     compileOnly fileTree(dir: '../app/libs', include: ['uniapp-v8-release.aar'])
@@ -28,8 +32,12 @@ dependencies {
 
     implementation 'com.alibaba:fastjson:1.2.83'
 
-    // X5 内核 (Tencent TBS) - 使用 compileOnly，实际打包由 app 模块负责
-    compileOnly fileTree(dir: '../app/libs', include: ['webview-x5-release.aar'])
-
-    // TBS SDK 已由 webview-x5-release.aar 提供，无需额外引入
+    if (buildAar) {
+        // 打 AAR 模式：解压 aar 为 jar，implementation 打包进去（避免 AAR 嵌套）
+        implementation files('libs/x5-classes.jar')
+        implementation files('libs/tbs-sdk.jar')
+    } else {
+        // AS 开发模式：compileOnly 引用 aar，由 app 模块提供运行时实现
+        compileOnly fileTree(dir: '../app/libs', include: ['webview-x5-release.aar'])
+    }
 }

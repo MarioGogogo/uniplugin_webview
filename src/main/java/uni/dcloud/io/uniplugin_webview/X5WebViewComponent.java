@@ -267,6 +267,82 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                 }
                 fireEvent("onprogress", createEventParams(data));
             }
+
+            private android.app.Activity getActivityFromContext(Context context) {
+                if (context instanceof android.app.Activity) {
+                    return (android.app.Activity) context;
+                }
+                while (context instanceof android.content.ContextWrapper) {
+                    if (context instanceof android.app.Activity) {
+                        return (android.app.Activity) context;
+                    }
+                    context = ((android.content.ContextWrapper) context).getBaseContext();
+                }
+                return null;
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, com.tencent.smtt.sdk.ValueCallback<Uri[]> filePathCallback, com.tencent.smtt.sdk.WebChromeClient.FileChooserParams fileChooserParams) {
+                Log.d(TAG, "X5: onShowFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : webView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+                
+                if (activity != null) {
+                    Log.d(TAG, "X5: Found Activity, starting FileChooserFragment");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = null;
+                    if (fileChooserParams != null) {
+                        try {
+                            intent = fileChooserParams.createIntent();
+                        } catch (Exception e) {
+                            Log.w(TAG, "X5: createIntent failed", e);
+                        }
+                    }
+                    if (intent == null) {
+                        intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    }
+                    // 核心修复：防止 H5 <input type="file"> 未指定 accept 导致 intent type 为空从而崩溃
+                    if (android.text.TextUtils.isEmpty(intent.getType())) {
+                        intent.setType("*/*");
+                    }
+
+                    fragment.start(intent, uris -> {
+                        filePathCallback.onReceiveValue(uris);
+                    });
+                    return true;
+                } else {
+                    Log.e(TAG, "X5: Cannot find Activity context! context=" + context);
+                }
+                return false;
+            }
+
+            // For Android 4.1+
+            public void openFileChooser(com.tencent.smtt.sdk.ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
+                Log.d(TAG, "X5: openFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : mWebView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+                if (activity != null) {
+                    Log.d(TAG, "X5: Found Activity for openFileChooser");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    intent.setType(TextUtils.isEmpty(acceptType) ? "*/*" : acceptType);
+
+                    fragment.start(intent, uris -> {
+                        uploadMsg.onReceiveValue(uris != null && uris.length > 0 ? uris[0] : null);
+                    });
+                } else {
+                    Log.e(TAG, "X5: Cannot find Activity context for openFileChooser!");
+                    uploadMsg.onReceiveValue(null);
+                }
+            }
         });
 
         // 添加 JavaScript 接口

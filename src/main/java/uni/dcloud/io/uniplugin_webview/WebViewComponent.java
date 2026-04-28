@@ -286,6 +286,82 @@ public class WebViewComponent extends UniComponent<FrameLayout> {
                 // 同时通过 fireEvent 支持 @onprogress 事件更新界面
                 fireEvent("onprogress", createEventParams(data));
             }
+
+            private android.app.Activity getActivityFromContext(Context context) {
+                if (context instanceof android.app.Activity) {
+                    return (android.app.Activity) context;
+                }
+                while (context instanceof android.content.ContextWrapper) {
+                    if (context instanceof android.app.Activity) {
+                        return (android.app.Activity) context;
+                    }
+                    context = ((android.content.ContextWrapper) context).getBaseContext();
+                }
+                return null;
+            }
+
+            @Override
+            public boolean onShowFileChooser(WebView webView, android.webkit.ValueCallback<Uri[]> filePathCallback, android.webkit.WebChromeClient.FileChooserParams fileChooserParams) {
+                Log.d(TAG, "WebView: onShowFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : webView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+                
+                if (activity != null) {
+                    Log.d(TAG, "WebView: Found Activity, starting FileChooserFragment");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = null;
+                    if (fileChooserParams != null) {
+                        try {
+                            intent = fileChooserParams.createIntent();
+                        } catch (Exception e) {
+                            Log.w(TAG, "WebView: createIntent failed", e);
+                        }
+                    }
+                    if (intent == null) {
+                        intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    }
+                    // 核心修复：防止 H5 <input type="file"> 未指定 accept 导致 intent type 为空从而崩溃
+                    if (android.text.TextUtils.isEmpty(intent.getType())) {
+                        intent.setType("*/*");
+                    }
+
+                    fragment.start(intent, uris -> {
+                        filePathCallback.onReceiveValue(uris);
+                    });
+                    return true;
+                } else {
+                    Log.e(TAG, "WebView: Cannot find Activity context! context=" + context);
+                }
+                return false;
+            }
+
+            // For Android 4.1+
+            public void openFileChooser(android.webkit.ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
+                Log.d(TAG, "WebView: openFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : mWebView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+                if (activity != null) {
+                    Log.d(TAG, "WebView: Found Activity for openFileChooser");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    intent.setType(TextUtils.isEmpty(acceptType) ? "*/*" : acceptType);
+
+                    fragment.start(intent, uris -> {
+                        uploadMsg.onReceiveValue(uris != null && uris.length > 0 ? uris[0] : null);
+                    });
+                } else {
+                    Log.e(TAG, "WebView: Cannot find Activity context for openFileChooser!");
+                    uploadMsg.onReceiveValue(null);
+                }
+            }
         });
 
         // 添加 JavaScript 接口
