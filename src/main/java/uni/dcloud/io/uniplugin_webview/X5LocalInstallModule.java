@@ -87,7 +87,9 @@ public class X5LocalInstallModule extends UniModule {
      */
     @UniJSMethod(uiThread = false)
     public void installX5Core(JSONObject options, final UniJSCallback callback) {
+        Log.d(TAG, "===== installX5Core 被调用 =====");
         if (mUniSDKInstance == null || mUniSDKInstance.getContext() == null) {
+            Log.e(TAG, "Context 为空，无法安装");
             invokeCallback(callback, false, "Context 为空，无法安装", null);
             return;
         }
@@ -107,47 +109,64 @@ public class X5LocalInstallModule extends UniModule {
         QbSdk.setTbsListener(new TbsListener() {
             @Override
             public void onDownloadFinish(int errCode) {
-                Log.d(TAG, "onDownloadFinish, errCode=" + errCode);
+                Log.d(TAG, "TbsListener.onDownloadFinish, errCode=" + errCode);
             }
 
             @Override
             public void onInstallFinish(int errCode) {
-                Log.d(TAG, "onInstallFinish, errCode=" + errCode);
+                Log.d(TAG, "TbsListener.onInstallFinish, errCode=" + errCode);
                 if (errCode != 200) {
-                    invokeCallback(callback, false, "TBS 底层安装错误，错误码：" + errCode, null);
+                    // TbsListener 回调在后台线程，切到主线程 invoke
+                    final int code = errCode;
+                    activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Log.e(TAG, "TBS 底层安装错误，errCode=" + code);
+                            invokeCallback(callback, false, "TBS 底层安装错误，错误码：" + code, null);
+                        }
+                    });
                 }
             }
 
             @Override
             public void onDownloadProgress(int progress) {
-                Log.d(TAG, "onDownloadProgress, progress=" + progress);
+                Log.d(TAG, "TbsListener.onDownloadProgress, progress=" + progress);
             }
         });
 
         // 如果已经安装了，直接返回成功
         if (X5LocalInstaller.isInited(activity)) {
             int version = QbSdk.getTbsVersion(activity);
+            Log.d(TAG, "X5 已安装，version=" + version + "，无需重复安装");
             JSONObject result = new JSONObject();
             result.put("version", String.valueOf(version));
+            result.put("needRestart", false);
             invokeCallback(callback, true, "X5 内核已安装，无需重复安装", result);
             return;
         }
+
+        Log.d(TAG, "X5 未安装，启动离线安装流程...");
 
         // 子线程执行安装
         new Thread(new Runnable() {
             @Override
             public void run() {
+                Log.d(TAG, "安装子线程已启动");
                 X5LocalInstaller installer = new X5LocalInstaller(activity, new X5LocalInstallListener() {
                     @Override
                     public void onSuccess() {
+                        Log.d(TAG, "X5LocalInstallListener.onSuccess 被触发");
                         int version = QbSdk.getTbsVersion(activity);
                         JSONObject result = new JSONObject();
                         result.put("version", String.valueOf(version));
-                        invokeCallback(callback, true, "X5 内核离线安装成功", result);
+                        result.put("needRestart", true);
+                        Log.d(TAG, "准备回调前端: success=true, version=" + version + ", needRestart=true");
+                        invokeCallback(callback, true, "X5 内核离线安装成功，请重启应用", result);
                     }
 
                     @Override
                     public void onError(String message) {
+                        Log.e(TAG, "X5LocalInstallListener.onError 被触发: " + message);
                         invokeCallback(callback, false, message, null);
                     }
                 });
