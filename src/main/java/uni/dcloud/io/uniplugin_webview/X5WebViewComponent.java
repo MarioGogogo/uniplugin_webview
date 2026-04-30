@@ -307,14 +307,13 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                         }
                     }
 
-                    if (isImage && activity instanceof androidx.fragment.app.FragmentActivity) {
-                        Log.d(TAG, "X5: Found FragmentActivity, starting MatisseProxyFragment");
-                        MatisseProxyFragment proxyFragment = new MatisseProxyFragment();
-                        androidx.fragment.app.FragmentActivity fa = (androidx.fragment.app.FragmentActivity) activity;
-                        fa.getSupportFragmentManager().beginTransaction().add(proxyFragment, "matisseProxy").commitAllowingStateLoss();
-                        fa.getSupportFragmentManager().executePendingTransactions();
+                    if (isImage) {
+                        Log.d(TAG, "X5: starting PhotoAlbumProxyFragment");
+                        PhotoAlbumProxyFragment proxyFragment = new PhotoAlbumProxyFragment();
+                        activity.getFragmentManager().beginTransaction().add(proxyFragment, "photoAlbumProxy").commitAllowingStateLoss();
+                        activity.getFragmentManager().executePendingTransactions();
 
-                        proxyFragment.startDefaultMatisse(1, uris -> {
+                        proxyFragment.openPhotoAlbum(1, uris -> {
                             filePathCallback.onReceiveValue(uris);
                         });
                         return true;
@@ -741,13 +740,13 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
             if (getInstance() != null && getInstance().getContext() != null) {
                 context = getInstance().getContext();
             }
-            if (context instanceof androidx.fragment.app.FragmentActivity) {
-                androidx.fragment.app.FragmentActivity fa = (androidx.fragment.app.FragmentActivity) context;
-                fa.runOnUiThread(() -> {
-                    MatisseProxyFragment fragment = new MatisseProxyFragment();
-                    fa.getSupportFragmentManager().beginTransaction().add(fragment, "matisseProxy").commitAllowingStateLoss();
-                    fa.getSupportFragmentManager().executePendingTransactions();
-                    fragment.startDefaultMatisse(maxSelectable > 0 ? maxSelectable : 1, uris -> {
+            if (context instanceof android.app.Activity) {
+                final android.app.Activity activity = (android.app.Activity) context;
+                activity.runOnUiThread(() -> {
+                    PhotoAlbumProxyFragment fragment = new PhotoAlbumProxyFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "photoAlbumProxy").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+                    fragment.openPhotoAlbum(maxSelectable > 0 ? maxSelectable : 1, uris -> {
                         try {
                             JSONObject result = new JSONObject();
                             if (uris != null && uris.length > 0) {
@@ -755,11 +754,11 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                                 com.alibaba.fastjson.JSONArray base64Arr = new com.alibaba.fastjson.JSONArray();
                                 for (Uri uri : uris) {
                                     arr.add(uri.toString());
-                                    
+
                                     // 压缩图片并转 Base64，供 H5 直接使用
                                     try {
                                         android.graphics.Bitmap bmp = android.provider.MediaStore.Images.Media.getBitmap(
-                                                fa.getContentResolver(), uri);
+                                                activity.getContentResolver(), uri);
                                         if (bmp != null) {
                                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
                                             int maxW = 800;
@@ -811,7 +810,7 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                     });
                 });
             } else {
-                Log.e(TAG, "openPhotoAlbum: Context is not FragmentActivity");
+                Log.e(TAG, "openPhotoAlbum: Context is not Activity");
             }
         }
 
