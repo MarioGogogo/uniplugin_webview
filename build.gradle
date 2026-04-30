@@ -1,4 +1,5 @@
 apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
 
 android {
     compileSdkVersion 29
@@ -17,18 +18,30 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
 }
 
 // 打 AAR 给 uni-app 时加 -PbuildAar=true
 // 例: ./gradlew :uniplugin_webview:assembleRelease -PbuildAar=true
 def buildAar = project.hasProperty('buildAar') && project.buildAar.toBoolean()
 
-dependencies {
-    // UniApp 核心库 - 使用 compileOnly 避免重复打包
+dependencies {    // UniApp 核心库 - 使用 compileOnly 避免重复打包
     compileOnly fileTree(dir: '../app/libs', include: ['uniapp-v8-release.aar'])
 
-    compileOnly 'androidx.recyclerview:recyclerview:1.0.0'
-    compileOnly 'androidx.appcompat:appcompat:1.0.0'
+    compileOnly 'androidx.recyclerview:recyclerview:1.1.0'
+    compileOnly 'androidx.appcompat:appcompat:1.1.0'
+    compileOnly 'androidx.fragment:fragment:1.3.6'
+    
+    // Matisse
+    compileOnly 'io.github.leavesczy:matisse:2.2.0'
+    compileOnly 'io.coil-kt.coil3:coil-compose:3.4.0'
 
     implementation 'com.alibaba:fastjson:1.2.83'
 

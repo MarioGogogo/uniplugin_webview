@@ -187,6 +187,9 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 Log.d(TAG, "页面加载完成：" + url + ", 标题：" + view.getTitle());
+
+
+
                 JSONObject data = new JSONObject();
                 data.put("url", url);
                 data.put("title", view.getTitle());
@@ -236,6 +239,12 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
 
         // 设置 WebChromeClient
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(com.tencent.smtt.export.external.interfaces.ConsoleMessage consoleMessage) {
+                Log.d(TAG, "H5 Console: " + consoleMessage.message() + " [" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + "]");
+                return super.onConsoleMessage(consoleMessage);
+            }
+
             @Override
             public boolean onJsAlert(WebView view, String url, String message, JsResult result) {
                 return super.onJsAlert(view, url, message, result);
@@ -288,6 +297,29 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
                 android.app.Activity activity = getActivityFromContext(context);
                 
                 if (activity != null) {
+                    boolean isImage = false;
+                    if (fileChooserParams != null && fileChooserParams.getAcceptTypes() != null) {
+                        for (String type : fileChooserParams.getAcceptTypes()) {
+                            if (type != null && type.contains("image")) {
+                                isImage = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (isImage && activity instanceof androidx.fragment.app.FragmentActivity) {
+                        Log.d(TAG, "X5: Found FragmentActivity, starting MatisseProxyFragment");
+                        MatisseProxyFragment proxyFragment = new MatisseProxyFragment();
+                        androidx.fragment.app.FragmentActivity fa = (androidx.fragment.app.FragmentActivity) activity;
+                        fa.getSupportFragmentManager().beginTransaction().add(proxyFragment, "matisseProxy").commitAllowingStateLoss();
+                        fa.getSupportFragmentManager().executePendingTransactions();
+
+                        proxyFragment.startDefaultMatisse(1, uris -> {
+                            filePathCallback.onReceiveValue(uris);
+                        });
+                        return true;
+                    }
+
                     Log.d(TAG, "X5: Found Activity, starting FileChooserFragment");
                     FileChooserFragment fragment = new FileChooserFragment();
                     activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
@@ -637,6 +669,151 @@ public class X5WebViewComponent extends UniComponent<FrameLayout> {
      * JavaScript 桥接类
      */
     public class JsBridge {
+
+        @android.webkit.JavascriptInterface
+        public void openCamera() {
+            Log.d(TAG, "openCamera called from H5 (Global Listener Mode)");
+            Context context = mWebView != null ? mWebView.getContext() : null;
+            if (getInstance() != null && getInstance().getContext() != null) {
+                context = getInstance().getContext();
+            }
+            if (context instanceof androidx.fragment.app.FragmentActivity) {
+                androidx.fragment.app.FragmentActivity fa = (androidx.fragment.app.FragmentActivity) context;
+                fa.runOnUiThread(() -> {
+                    CameraProxyFragment fragment = new CameraProxyFragment();
+                    fa.getSupportFragmentManager().beginTransaction().add(fragment, "cameraProxy").commitAllowingStateLoss();
+                    fa.getSupportFragmentManager().executePendingTransactions();
+                    fragment.start(uri -> {
+                        if (mWebView != null) {
+                            try {
+                                JSONObject result = new JSONObject();
+                                if (uri != null) {
+                                    result.put("success", true);
+                                    result.put("uri", uri.toString());
+                                    // 读取图片转 Base64，H5 可直接用 data:image/jpeg;base64,... 展示
+                                    try {
+                                        android.graphics.Bitmap bmp = android.provider.MediaStore.Images.Media.getBitmap(
+                                                fa.getContentResolver(), uri);
+                                        if (bmp != null) {
+                                            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                                            // 压缩到 800px 宽，减少传输体积
+                                            int maxW = 800;
+                                            if (bmp.getWidth() > maxW) {
+                                                float scale = (float) maxW / bmp.getWidth();
+                                                bmp = android.graphics.Bitmap.createScaledBitmap(bmp, maxW,
+                                                        (int) (bmp.getHeight() * scale), true);
+                                            }
+                                            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, baos);
+                                            result.put("base64", "data:image/jpeg;base64," +
+                                                    android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP));
+                                            baos.close();
+                                        }
+                                    } catch (Exception e) {
+                                        Log.w(TAG, "图片转 Base64 失败: " + e.getMessage());
+                                    }
+                                } else {
+                                    result.put("success", false);
+                                    result.put("error", "User cancelled");
+                                }
+                                String js = "javascript:if(window.onCameraResult) { window.onCameraResult(" + result.toJSONString() + "); }";
+                                Log.d(TAG, "openCamera 执行全局回调 JS: " + js.substring(0, Math.min(js.length(), 200)) + "...");
+                                mWebView.post(() -> {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                        mWebView.evaluateJavascript(js, null);
+                                    } else {
+                                        mWebView.loadUrl(js);
+                                    }
+                                });
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                });
+            } else {
+                Log.e(TAG, "openCamera: Context is not FragmentActivity");
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public void openPhotoAlbum(int maxSelectable) {
+            Context context = mWebView != null ? mWebView.getContext() : null;
+            if (getInstance() != null && getInstance().getContext() != null) {
+                context = getInstance().getContext();
+            }
+            if (context instanceof androidx.fragment.app.FragmentActivity) {
+                androidx.fragment.app.FragmentActivity fa = (androidx.fragment.app.FragmentActivity) context;
+                fa.runOnUiThread(() -> {
+                    MatisseProxyFragment fragment = new MatisseProxyFragment();
+                    fa.getSupportFragmentManager().beginTransaction().add(fragment, "matisseProxy").commitAllowingStateLoss();
+                    fa.getSupportFragmentManager().executePendingTransactions();
+                    fragment.startDefaultMatisse(maxSelectable > 0 ? maxSelectable : 1, uris -> {
+                        try {
+                            JSONObject result = new JSONObject();
+                            if (uris != null && uris.length > 0) {
+                                com.alibaba.fastjson.JSONArray arr = new com.alibaba.fastjson.JSONArray();
+                                com.alibaba.fastjson.JSONArray base64Arr = new com.alibaba.fastjson.JSONArray();
+                                for (Uri uri : uris) {
+                                    arr.add(uri.toString());
+                                    
+                                    // 压缩图片并转 Base64，供 H5 直接使用
+                                    try {
+                                        android.graphics.Bitmap bmp = android.provider.MediaStore.Images.Media.getBitmap(
+                                                fa.getContentResolver(), uri);
+                                        if (bmp != null) {
+                                            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                                            int maxW = 800;
+                                            if (bmp.getWidth() > maxW) {
+                                                float scale = (float) maxW / bmp.getWidth();
+                                                bmp = android.graphics.Bitmap.createScaledBitmap(bmp, maxW,
+                                                        (int) (bmp.getHeight() * scale), true);
+                                            }
+                                            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, baos);
+                                            base64Arr.add("data:image/jpeg;base64," +
+                                                    android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP));
+                                            baos.close();
+                                        }
+                                    } catch (Exception e) {
+                                        Log.w(TAG, "图片转 Base64 失败: " + e.getMessage());
+                                    }
+                                }
+                                result.put("success", true);
+                                result.put("uris", arr);
+                                result.put("base64s", base64Arr);
+                            } else {
+                                result.put("success", false);
+                                result.put("error", "User cancelled");
+                            }
+                            // 执行全局回调 JS，直接跳过 UniApp 容器通信 H5
+                            String js = "javascript:if(window.onPhotoAlbumResult) { window.onPhotoAlbumResult(" + result.toJSONString() + "); }";
+                            Log.d(TAG, "openPhotoAlbum 执行全局回调 JS: " + js.substring(0, Math.min(js.length(), 200)) + "...");
+                            
+                            JSONObject cb = new JSONObject();
+                            cb.put("handler", "onPhotoAlbumResult");
+                            cb.put("data", result);
+                            
+                            if (onJsMessageCallback != null) {
+                                onJsMessageCallback.invokeAndKeepAlive(cb);
+                            }
+                            if (mWebView != null) {
+                                mWebView.post(() -> {
+                                    fireEvent("onjsmessage", createEventParams(cb));
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                                        mWebView.evaluateJavascript(js, null);
+                                    } else {
+                                        mWebView.loadUrl(js);
+                                    }
+                                });
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    });
+                });
+            } else {
+                Log.e(TAG, "openPhotoAlbum: Context is not FragmentActivity");
+            }
+        }
 
         @android.webkit.JavascriptInterface
         public void postMessage(String message) {
