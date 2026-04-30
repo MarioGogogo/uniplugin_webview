@@ -70,6 +70,10 @@ public class PhotoAlbumActivity extends Activity {
     // 标志位：用户从设置页面返回后是否需要重新加载
     private boolean mNeedReloadOnResume = false;
 
+    // 缩略图内存缓存 + 后台加载线程池
+    private android.util.LruCache<String, Bitmap> mThumbnailCache;
+    private java.util.concurrent.ExecutorService mImageLoadExecutor;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -77,6 +81,17 @@ public class PhotoAlbumActivity extends Activity {
 
         mMaxSelectable = getIntent().getIntExtra(EXTRA_MAX_SELECTABLE, 9);
         if (mMaxSelectable <= 0) mMaxSelectable = 1;
+
+        // 初始化缩略图缓存（最大内存的 1/8）
+        int maxMemory = (int) (Runtime.getRuntime().maxMemory() / 1024);
+        int cacheSize = maxMemory / 8;
+        mThumbnailCache = new android.util.LruCache<String, Bitmap>(cacheSize) {
+            @Override
+            protected int sizeOf(String key, Bitmap bitmap) {
+                return bitmap.getByteCount() / 1024;
+            }
+        };
+        mImageLoadExecutor = java.util.concurrent.Executors.newFixedThreadPool(4);
 
         initViews();
         checkAndRequestPermission();
@@ -95,10 +110,21 @@ public class PhotoAlbumActivity extends Activity {
     }
 
     private void initViews() {
+        // 设置状态栏为透明，让内容延伸到状态栏下方
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        }
+
+        // 状态栏占位高度
+        View statusBarPlaceholder = findViewById(R.id.status_bar_placeholder);
+        statusBarPlaceholder.getLayoutParams().height = getStatusBarHeight();
+
         findViewById(R.id.btn_back).setOnClickListener(v -> finish());
 
         mTvTitle = findViewById(R.id.tv_title);
-        mTvTitle.setText("全部");
+        mTvTitle.setText("全部照片");
 
         mBtnArrow = findViewById(R.id.btn_arrow);
         mTitleContainer = findViewById(R.id.title_container);
@@ -193,6 +219,18 @@ public class PhotoAlbumActivity extends Activity {
                 loadPhotos();
             }
         }
+    }
+
+    /**
+     * 获取状态栏高度（像素）
+     */
+    private int getStatusBarHeight() {
+        int result = 0;
+        int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resourceId > 0) {
+            result = getResources().getDimensionPixelSize(resourceId);
+        }
+        return result;
     }
 
     private void toggleFolderList() {
@@ -374,6 +412,14 @@ public class PhotoAlbumActivity extends Activity {
                 setResult(RESULT_CANCELED);
             }
             finish();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mImageLoadExecutor != null) {
+            mImageLoadExecutor.shutdown();
         }
     }
 
@@ -666,10 +712,15 @@ public class PhotoAlbumActivity extends Activity {
 
     private void updateBottomBar() {
         int count = mSelectedPhotos.size();
-        mBtnConfirm.setText(count > 0 ? "确定(" + count + "/" + mMaxSelectable + ")" : "确定");
+        mBtnConfirm.setText("完成(" + count + "/" + mMaxSelectable + ")");
         mBtnConfirm.setEnabled(count > 0);
+        if (count > 0) {
+            mBtnConfirm.setBackgroundColor(0xFF1AAD19); // 微信绿色
+        } else {
+            mBtnConfirm.setBackgroundColor(0xFF555555); // 灰色
+        }
         mBtnPreview.setEnabled(count > 0);
-        mBtnPreview.setTextColor(count > 0 ? 0xFF333333 : 0xFF999999);
+        mBtnPreview.setTextColor(count > 0 ? 0xFFFFFFFF : 0xFF666666);
     }
 
     private void confirmSelection() {
@@ -777,7 +828,9 @@ public class PhotoAlbumActivity extends Activity {
         }
 
         void bind(PhotoItem item, int position) {
-            loadThumbnail(item, ivPhoto);
+            String cacheKey = item.uri != null ? item.uri.toString() : String.valueOf(item.id);
+            ivPhoto.setTag(cacheKey);
+            loadThumbnailAsync(item, ivPhoto, cacheKey);
 
             if (item.isSelected) {
                 vSelectBg.setBackgroundResource(R.drawable.bg_circle_selected);
@@ -794,22 +847,60 @@ public class PhotoAlbumActivity extends Activity {
         }
     }
 
-    private void loadThumbnail(PhotoItem item, ImageView imageView) {
-        // 1. MediaStore 缩略图（优先，兼容性最好）
+    /**
+     * 异步加载缩略图，避免主线程 IO 导致滑动掉帧
+     * 策略：LruCache 内存缓存 → 后台线程解码 → 主线程刷新
+     */
+    private void loadThumbnailAsync(PhotoItem item, ImageView imageView, String cacheKey) {
+        // 1. 内存缓存命中，直接显示
+        Bitmap cached = mThumbnailCache.get(cacheKey);
+        if (cached != null) {
+            imageView.setImageBitmap(cached);
+            return;
+        }
+
+        // 2. 设置占位图，防止复用时显示旧图
+        imageView.setImageResource(android.R.color.darker_gray);
+
+        // 3. 提交到后台线程解码
+        mImageLoadExecutor.execute(() -> {
+            Bitmap bmp = decodeThumbnailBitmap(item);
+            if (bmp != null) {
+                mThumbnailCache.put(cacheKey, bmp);
+            }
+
+            final Bitmap result = bmp;
+            imageView.post(() -> {
+                // Tag 校验：防止 RecyclerView 复用导致图片错位
+                Object currentTag = imageView.getTag();
+                if (currentTag == null || !currentTag.equals(cacheKey)) {
+                    return;
+                }
+                if (result != null) {
+                    imageView.setImageBitmap(result);
+                } else {
+                    imageView.setImageResource(android.R.color.darker_gray);
+                }
+            });
+        });
+    }
+
+    /**
+     * 在后台线程中执行实际的 Bitmap 解码
+     */
+    private Bitmap decodeThumbnailBitmap(PhotoItem item) {
+        // 1. MediaStore 系统缩略图
         if (item.id > 0) {
             try {
                 Bitmap thumbnail = MediaStore.Images.Thumbnails.getThumbnail(
                         getContentResolver(), item.id, MediaStore.Images.Thumbnails.MINI_KIND, null);
-                if (thumbnail != null) {
-                    imageView.setImageBitmap(thumbnail);
-                    return;
-                }
+                if (thumbnail != null) return thumbnail;
             } catch (Exception e) {
-                Log.w(TAG, "getThumbnail failed for id=" + item.id + ": " + e.getMessage());
+                Log.w(TAG, "getThumbnail failed: " + e.getMessage());
             }
         }
 
-        // 2. Content URI 流式解码（Android 10+ 优先此方式，因为 DATA 路径不可靠）
+        // 2. Content URI 采样解码
         if (item.uri != null && "content".equals(item.uri.getScheme())) {
             try {
                 BitmapFactory.Options opts = new BitmapFactory.Options();
@@ -828,18 +919,15 @@ public class PhotoAlbumActivity extends Activity {
                     if (is != null) {
                         Bitmap bmp = BitmapFactory.decodeStream(is, null, opts);
                         is.close();
-                        if (bmp != null) {
-                            imageView.setImageBitmap(bmp);
-                            return;
-                        }
+                        if (bmp != null) return bmp;
                     }
                 }
             } catch (Exception e) {
-                Log.w(TAG, "decodeStream content URI failed: " + item.uri + " | " + e.getMessage());
+                Log.w(TAG, "decodeStream failed: " + item.uri);
             }
         }
 
-        // 3. 文件路径直接解码缩略图（file:// URI 或纯路径回退）
+        // 3. 文件路径采样解码
         String path = item.uri != null ? item.uri.getPath() : null;
         if (path != null) {
             File file = new File(path);
@@ -855,26 +943,14 @@ public class PhotoAlbumActivity extends Activity {
                     opts.inJustDecodeBounds = false;
                     opts.inSampleSize = sample;
                     Bitmap bmp = BitmapFactory.decodeFile(path, opts);
-                    if (bmp != null) {
-                        imageView.setImageBitmap(bmp);
-                        return;
-                    }
+                    if (bmp != null) return bmp;
                 } catch (Exception e) {
                     Log.w(TAG, "decodeFile failed: " + path);
                 }
             }
         }
 
-        // 4. 最后尝试直接 setImageURI（系统会自动选择解码方式）
-        try {
-            imageView.setImageURI(item.uri);
-            if (imageView.getDrawable() != null) return;
-        } catch (Exception e) {
-            Log.w(TAG, "setImageURI failed: " + item.uri);
-        }
-
-        // 5. 占位图
-        imageView.setImageResource(android.R.color.darker_gray);
+        return null;
     }
 
     private class FolderAdapter extends RecyclerView.Adapter<FolderViewHolder> {
