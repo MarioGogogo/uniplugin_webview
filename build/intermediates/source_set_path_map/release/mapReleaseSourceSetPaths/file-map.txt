@@ -1,7 +1,0 @@
-uni.dcloud.io.uniplugin_webview-pngs-0 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/build/generated/res/pngs/release
-uni.dcloud.io.uniplugin_webview-resValues-1 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/build/generated/res/resValues/release
-uni.dcloud.io.uniplugin_webview-mergeReleaseResources-2 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
-uni.dcloud.io.uniplugin_webview-mergeReleaseResources-3 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
-uni.dcloud.io.uniplugin_webview-release-4 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/build/intermediates/merged_res/release/mergeReleaseResources
-uni.dcloud.io.uniplugin_webview-main-5 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/src/main/res
-uni.dcloud.io.uniplugin_webview-release-6 /Users/lovewcc/Documents/Me/Android/Android-SDK@5.07.82603_20260414/UniPlugin-Hello-AS/uniplugin_webview/src/release/res

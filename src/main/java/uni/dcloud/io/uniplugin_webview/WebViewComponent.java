@@ -616,6 +616,41 @@ public class WebViewComponent extends UniComponent<FrameLayout> {
     }
 
     /**
+     * 清除会话数据并重新加载页面
+     * 清除 Cookie + localStorage + sessionStorage，然后 reload
+     * 调用示例：this.$refs.webview.clearSessionAndReload()
+     */
+    @UniJSMethod
+    public void clearSessionAndReload() {
+        if (mWebView == null) return;
+
+        // 清除 Cookie
+        android.webkit.CookieManager cookieManager = android.webkit.CookieManager.getInstance();
+        cookieManager.removeAllCookies(null);
+        cookieManager.flush();
+
+        // 通过 JS 清除 localStorage 和 sessionStorage
+        String js = "(function(){" +
+            "try { localStorage.clear(); } catch(e) {}" +
+            "try { sessionStorage.clear(); } catch(e) {}" +
+            "return 'ok';" +
+            "})()";
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            mWebView.evaluateJavascript(js, result -> {
+                Log.d(TAG, "clearSessionAndReload: 会话数据已清除，开始 reload");
+                mWebView.reload();
+            });
+        } else {
+            mWebView.loadUrl("javascript:" + js);
+            mWebView.postDelayed(() -> {
+                Log.d(TAG, "clearSessionAndReload: 会话数据已清除，开始 reload");
+                mWebView.reload();
+            }, 300);
+        }
+    }
+
+    /**
      * 销毁 WebView
      */
     @Override

@@ -103,6 +103,7 @@ methods: {
 | `getCurrentUrl()` | - | 同步返回当前页面 URL（`String`） |
 | `evaluateJavascript(js, callback)` | `String, Function` | 执行 JS 代码，回调返回 `{ result }` |
 | `clearCache(flag)` | `Boolean` | 清除缓存（见下方说明） |
+| `clearSessionAndReload()` | - | 清除 Cookie + localStorage + sessionStorage 后重新加载页面 |
 
 #### `clearCache(flag)` 参数说明
 
@@ -133,6 +134,9 @@ this.$refs.webview.reload()
 this.$refs.webview.evaluateJavascript('document.title', res => {
   console.log('页面标题：', res.result)
 })
+
+// 清除登录态并重新加载（Cookie + localStorage + sessionStorage）
+this.$refs.webview.clearSessionAndReload()
 ```
 
 ---
