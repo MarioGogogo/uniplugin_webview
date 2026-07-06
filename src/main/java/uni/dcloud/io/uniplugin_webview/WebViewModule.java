@@ -286,6 +286,157 @@ public class WebViewModule extends UniModule {
     }
 
     /**
+     * 预热 WebView（在应用启动时调用）
+     * 调用示例：uni.requireNativePlugin('UniWebView-Module').warmUp({}, result => { console.log(result) })
+     */
+    @UniJSMethod(uiThread = true)
+    public void warmUp(JSONObject options, UniJSCallback callback) {
+        try {
+            if (mUniSDKInstance != null && mUniSDKInstance.getContext() != null) {
+                Context context = mUniSDKInstance.getContext();
+
+                // 检查是否已预热
+                if (WarmUpManager.getInstance().isWarmedUp()) {
+                    JSONObject result = new JSONObject();
+                    result.put("success", true);
+                    result.put("message", "WebView 已经预热过");
+                    result.put("warmedUp", true);
+                    invokeCallback(callback, true, "WebView 已经预热过", result);
+                    return;
+                }
+
+                // 开始预热
+                WarmUpManager.getInstance().warmUp(context, new WarmUpManager.WarmUpCallback() {
+                    @Override
+                    public void onWarmUpComplete(boolean success, android.webkit.WebView webView) {
+                        JSONObject result = new JSONObject();
+                        result.put("success", success);
+                        result.put("warmedUp", success);
+
+                        if (success) {
+                            result.put("message", "WebView 预热成功");
+                            result.put("poolSize", WebViewPool.getInstance().getPoolSize());
+                        } else {
+                            result.put("message", "WebView 预热失败");
+                        }
+
+                        invokeCallback(callback, success, result.getString("message"), result);
+                    }
+                });
+
+                // 同步返回（预热是异步的）
+                JSONObject result = new JSONObject();
+                result.put("success", true);
+                result.put("message", "WebView 预热已启动（异步）");
+                invokeCallback(callback, true, "WebView 预热已启动（异步）", result);
+
+            } else {
+                invokeCallback(callback, false, "Context 为空", null);
+            }
+        } catch (Exception e) {
+            invokeCallback(callback, false, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * 空闲时段预热（利用系统空闲时间预热）
+     * 调用示例：uni.requireNativePlugin('UniWebView-Module').warmUpWhenIdle({}, result => { console.log(result) })
+     */
+    @UniJSMethod(uiThread = true)
+    public void warmUpWhenIdle(JSONObject options, UniJSCallback callback) {
+        try {
+            if (mUniSDKInstance != null && mUniSDKInstance.getContext() != null) {
+                Context context = mUniSDKInstance.getContext();
+
+                // 检查是否已预热
+                if (WarmUpManager.getInstance().isWarmedUp()) {
+                    JSONObject result = new JSONObject();
+                    result.put("success", true);
+                    result.put("message", "WebView 已经预热过");
+                    result.put("warmedUp", true);
+                    invokeCallback(callback, true, "WebView 已经预热过", result);
+                    return;
+                }
+
+                // 安排空闲时段预热
+                WarmUpManager.getInstance().warmUpWhenIdle(context);
+
+                JSONObject result = new JSONObject();
+                result.put("success", true);
+                result.put("message", "已安排空闲时段预热");
+                invokeCallback(callback, true, "已安排空闲时段预热", result);
+
+            } else {
+                invokeCallback(callback, false, "Context 为空", null);
+            }
+        } catch (Exception e) {
+            invokeCallback(callback, false, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * 检查预热状态
+     * 调用示例：uni.requireNativePlugin('UniWebView-Module').isWarmedUp({}, result => { console.log(result) })
+     */
+    @UniJSMethod(uiThread = true)
+    public void isWarmedUp(JSONObject options, UniJSCallback callback) {
+        try {
+            boolean warmedUp = WarmUpManager.getInstance().isWarmedUp();
+
+            JSONObject result = new JSONObject();
+            result.put("success", true);
+            result.put("warmedUp", warmedUp);
+            result.put("poolSize", WebViewPool.getInstance().getPoolSize());
+
+            invokeCallback(callback, true, "检查完成", result);
+        } catch (Exception e) {
+            invokeCallback(callback, false, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * 获取 WebView 池状态
+     * 调用示例：uni.requireNativePlugin('UniWebView-Module').getPoolStatus({}, result => { console.log(result) })
+     */
+    @UniJSMethod(uiThread = true)
+    public void getPoolStatus(JSONObject options, UniJSCallback callback) {
+        try {
+            JSONObject result = new JSONObject();
+            result.put("success", true);
+            result.put("poolSize", WebViewPool.getInstance().getPoolSize());
+            result.put("warmedUp", WarmUpManager.getInstance().isWarmedUp());
+            result.put("maxPoolSize", 5); // MAX_POOL_SIZE
+
+            invokeCallback(callback, true, "获取成功", result);
+        } catch (Exception e) {
+            invokeCallback(callback, false, e.getMessage(), null);
+        }
+    }
+
+    /**
+     * 清理所有 WebView 池
+     * 调用示例：uni.requireNativePlugin('UniWebView-Module').clearAllPools({}, result => { console.log(result) })
+     */
+    @UniJSMethod(uiThread = true)
+    public void clearAllPools(JSONObject options, UniJSCallback callback) {
+        try {
+            int poolSize = WebViewPool.getInstance().getPoolSize();
+
+            WebViewPool.getInstance().clearAll();
+            WarmUpManager.getInstance().reset();
+
+            JSONObject result = new JSONObject();
+            result.put("success", true);
+            result.put("message", "已清理 " + poolSize + " 个 WebView 池");
+            result.put("clearedCount", poolSize);
+
+            invokeCallback(callback, true, "已清理所有 WebView 池", result);
+        } catch (Exception e) {
+            invokeCallback(callback, false, e.getMessage(), null);
+        }
+    }
+
+    /**
      * 工具方法：调用回调
      */
     private void invokeCallback(UniJSCallback callback, boolean success, String message, JSONObject data) {
