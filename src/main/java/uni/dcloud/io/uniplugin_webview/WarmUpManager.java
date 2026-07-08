@@ -106,8 +106,7 @@ public class WarmUpManager {
         if (isWarmedUp.get()) {
             Log.d(TAG, "WebView 已经预热过，直接使用");
             if (callback != null) {
-                WebView webView = WebViewPool.getInstance().getPooledWebView("warmup_pool");
-                callback.onWarmUpComplete(true, webView);
+                callback.onWarmUpComplete(true, null);
             }
             return;
         }
@@ -122,15 +121,10 @@ public class WarmUpManager {
         Log.d(TAG, "开始预热 WebView");
         this.warmUpCallback = callback;
 
-        // 在后台线程预热
-        new Thread(() -> {
+        // WebView 必须在主线程中创建
+        new Handler(Looper.getMainLooper()).post(() -> {
             try {
-                // 准备 Looper（如果需要）
-                if (Looper.myLooper() == null) {
-                    Looper.prepare();
-                }
-
-                // 创建 WebView
+                // 创建 WebView（必须在主线程）
                 final WebView webView = new WebView(context.getApplicationContext());
 
                 // 配置 WebView
@@ -153,14 +147,12 @@ public class WarmUpManager {
 
                 Log.d(TAG, "WebView 预热完成");
 
-                // 在主线程回调
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    if (warmUpCallback != null) {
-                        warmUpCallback.onWarmUpComplete(true, webView);
-                        warmUpCallback = null;
-                    }
-                    warmingUpWebView = null;
-                });
+                // 回调
+                if (warmUpCallback != null) {
+                    warmUpCallback.onWarmUpComplete(true, webView);
+                    warmUpCallback = null;
+                }
+                warmingUpWebView = null;
 
             } catch (Exception e) {
                 Log.e(TAG, "WebView 预热失败: " + e.getMessage(), e);
@@ -169,15 +161,13 @@ public class WarmUpManager {
                 isWarmedUp.set(false);
                 warmingUpWebView = null;
 
-                // 在主线程回调
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    if (warmUpCallback != null) {
-                        warmUpCallback.onWarmUpComplete(false, null);
-                        warmUpCallback = null;
-                    }
-                });
+                // 回调失败
+                if (warmUpCallback != null) {
+                    warmUpCallback.onWarmUpComplete(false, null);
+                    warmUpCallback = null;
+                }
             }
-        }, "WebViewWarmUpThread").start();
+        });
     }
 
     /**
@@ -186,6 +176,11 @@ public class WarmUpManager {
      * @param context 上下文
      */
     public void warmUpWhenIdle(final Context context) {
+        if (context == null) {
+            Log.e(TAG, "context 不能为 null");
+            return;
+        }
+
         if (isWarmedUp.get()) {
             Log.d(TAG, "已经预热过，无需空闲预热");
             return;
@@ -193,15 +188,30 @@ public class WarmUpManager {
 
         Log.d(TAG, "安排空闲时段预热");
 
-        // 使用 IdleHandler 在空闲时预热
-        new Handler(Looper.getMainLooper()).post(() -> {
-            Looper.myQueue().addIdleHandler(() -> {
-                Log.d(TAG, "系统空闲，开始预热");
-                warmUp(context);
-                // 只预热一次，返回 false 移除 IdleHandler
-                return false;
+        try {
+            // 使用 IdleHandler 在空闲时预热
+            new Handler(Looper.getMainLooper()).post(() -> {
+                try {
+                    Looper.myQueue().addIdleHandler(() -> {
+                        Log.d(TAG, "系统空闲，开始预热");
+                        try {
+                            warmUp(context);
+                        } catch (Exception e) {
+                            Log.e(TAG, "预热过程出错: " + e.getMessage(), e);
+                        }
+                        // 只预热一次，返回 false 移除 IdleHandler
+                        return false;
+                    });
+                } catch (Exception e) {
+                    Log.e(TAG, "添加 IdleHandler 失败: " + e.getMessage(), e);
+                }
             });
-        });
+        } catch (Exception e) {
+            Log.e(TAG, "安排空闲预热失败: " + e.getMessage(), e);
+            // 降级：立即预热
+            Log.d(TAG, "降级方案：立即执行预热");
+            warmUp(context);
+        }
     }
 
     /**

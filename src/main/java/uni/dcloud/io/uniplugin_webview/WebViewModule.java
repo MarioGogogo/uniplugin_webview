@@ -306,7 +306,7 @@ public class WebViewModule extends UniModule {
                     return;
                 }
 
-                // 开始预热
+                // 开始预热（异步，只通过回调返回一次结果）
                 WarmUpManager.getInstance().warmUp(context, new WarmUpManager.WarmUpCallback() {
                     @Override
                     public void onWarmUpComplete(boolean success, android.webkit.WebView webView) {
@@ -324,12 +324,6 @@ public class WebViewModule extends UniModule {
                         invokeCallback(callback, success, result.getString("message"), result);
                     }
                 });
-
-                // 同步返回（预热是异步的）
-                JSONObject result = new JSONObject();
-                result.put("success", true);
-                result.put("message", "WebView 预热已启动（异步）");
-                invokeCallback(callback, true, "WebView 预热已启动（异步）", result);
 
             } else {
                 invokeCallback(callback, false, "Context 为空", null);
