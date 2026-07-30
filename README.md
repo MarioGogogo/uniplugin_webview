@@ -10,6 +10,7 @@
 - **缓存管理**: 清除 WebView 缓存和数据
 - **WebView 池**: 单例模式复用 WebView 实例，提升性能
 - **预热机制**: 应用启动时预热 WebView，缩短首次加载时间
+- **文件上传**: 支持 `<input type="file">` 文件和图片上传，无需存储/相册权限（系统 SAF 方案）
 
 ## 插件结构
 
@@ -308,6 +309,102 @@ webViewModule.getWebViewVersion((result) => {
 | -8 | 加载超时 |
 | -12 | 主机无法解析 |
 | -13 | 服务器连接失败 |
+
+## 文件上传功能
+
+WebView 组件支持 H5 页面的 `<input type="file">` 文件上传功能。
+
+### 功能特性
+
+- **无需申请存储/相册权限**: 通过系统 SAF（Storage Access Framework）选择器拉起文件选择，`content://` Uri 由系统授予临时 URI 权限，**不需要** `READ_EXTERNAL_STORAGE` / `READ_MEDIA_*` / `CAMERA` 等权限
+- **拒绝权限也能用**: 即使用户在系统设置中关闭了 App 的相册/文件权限，仍可正常弹出系统选择器并选择文件
+- **支持多种类型**:
+  - 图片文件 (`accept="image/*"`)
+  - 视频文件 (`accept="video/*"`)
+  - 任意文件 (`accept="*/*"`)
+- **类型空保护**: H5 未指定 `accept` 时兜底 `setType("*/*")`，避免 Intent 类型为空导致崩溃
+
+### 实现原理
+
+`WebChromeClient.onShowFileChooser` 触发时，由无 UI 的代理 Fragment `FileChooserFragment` 调起 `Intent.ACTION_GET_CONTENT`（系统 SAF 选择器），并通过 `startActivityForResult` 接收选中文件的 `content://` Uri 数组回传给 H5。系统会自动为返回的 Uri 授予临时读取权限，因此全程不涉及运行时权限申请。
+
+### H5 端使用示例
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>文件上传示例</title>
+</head>
+<body>
+  <h2>文件上传测试</h2>
+
+  <!-- 图片上传 -->
+  <div>
+    <label>选择图片：</label>
+    <input type="file" accept="image/*" onchange="previewImage(this)">
+  </div>
+
+  <!-- 视频上传 -->
+  <div>
+    <label>选择视频：</label>
+    <input type="file" accept="video/*">
+  </div>
+
+  <!-- 任意文件 -->
+  <div>
+    <label>选择文件：</label>
+    <input type="file" accept="*/*">
+  </div>
+
+  <!-- 图片预览 -->
+  <div id="preview"></div>
+
+  <script>
+    function previewImage(input) {
+      if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('preview').innerHTML =
+            '<img src="' + e.target.result + '" style="max-width:300px;">';
+        };
+        reader.readAsDataURL(input.files[0]);
+      }
+    }
+  </script>
+</body>
+</html>
+```
+
+### uni-app 端集成
+
+无需额外配置，直接加载包含文件上传功能的 H5 页面即可：
+
+```vue
+<template>
+  <view>
+    <UniWebView :src="webviewUrl"></UniWebView>
+  </view>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      // H5 页面 URL（包含文件上传功能）
+      webviewUrl: 'https://your-domain.com/upload.html'
+    }
+  }
+}
+</script>
+```
+
+### 注意事项
+
+1. **只在 nvue 页面可用**: WebView 组件只能在 `.nvue` 页面中使用
+2. **无需存储权限**: 选择文件走系统 SAF，即使关闭相册/文件权限也可正常使用
+3. **多文件支持**: 同时支持单选（`getDataString()`）与多选（`getClipData()`）
 
 ## 组件方法
 

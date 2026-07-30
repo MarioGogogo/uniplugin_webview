@@ -1,7 +1,9 @@
 package uni.dcloud.io.uniplugin_webview;
 
+import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.text.TextUtils;
 import android.util.Log;
@@ -141,10 +143,12 @@ public class WebViewComponent extends UniComponent<FrameLayout> {
         // 缓存设置
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // 禁止 WebView 访问本地文件系统，防止本地数据泄露
-        settings.setAllowFileAccess(false);
-        settings.setAllowFileAccessFromFileURLs(false);
-        settings.setAllowUniversalAccessFromFileURLs(false);
+        // 文件访问安全配置：平衡安全性与文件上传功能
+        // setAllowFileAccess 必须为 true 才能支持 <input type="file">
+        // 但我们可以通过拦截 file:// 协议来防止恶意加载
+        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccessFromFileURLs(false);  // 禁止 file:// URL 的 JS 访问
+        settings.setAllowUniversalAccessFromFileURLs(false); // 禁止跨域访问
 
         // 编码设置
         settings.setDefaultTextEncodingName("UTF-8");
@@ -272,7 +276,7 @@ public class WebViewComponent extends UniComponent<FrameLayout> {
             }
         });
 
-        // 设置 WebChromeClient 处理 JS 对话框和地理位置
+        // 设置 WebChromeClient 处理 JS 对话框、地理位置和文件上传
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onJsAlert(WebView view, String url, String message, android.webkit.JsResult result) {
@@ -310,6 +314,88 @@ public class WebViewComponent extends UniComponent<FrameLayout> {
                 }
                 // 同时通过 fireEvent 支持 @onprogress 事件更新界面
                 fireEvent("onprogress", createEventParams(data));
+            }
+
+            /**
+             * 递归从 Context 中解析出宿主 Activity（WebView 宿主可能被 ContextWrapper 包裹）
+             */
+            private android.app.Activity getActivityFromContext(Context context) {
+                if (context instanceof android.app.Activity) {
+                    return (android.app.Activity) context;
+                }
+                while (context instanceof android.content.ContextWrapper) {
+                    if (context instanceof android.app.Activity) {
+                        return (android.app.Activity) context;
+                    }
+                    context = ((android.content.ContextWrapper) context).getBaseContext();
+                }
+                return null;
+            }
+
+            /**
+             * 处理文件上传请求（Android 5.0+）
+             * 当 H5 页面点击 <input type="file"> 时触发。
+             * 直接通过系统 SAF 拉起文件选择器，无需申请存储/相册权限。
+             */
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback,
+                                             FileChooserParams fileChooserParams) {
+                Log.d(TAG, "WebView: onShowFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : webView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+
+                if (activity != null) {
+                    Log.d(TAG, "WebView: Found Activity, starting FileChooserFragment");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = null;
+                    if (fileChooserParams != null) {
+                        try {
+                            intent = fileChooserParams.createIntent();
+                        } catch (Exception e) {
+                            Log.w(TAG, "WebView: createIntent failed", e);
+                        }
+                    }
+                    if (intent == null) {
+                        intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    }
+                    // 核心修复：防止 H5 <input type="file"> 未指定 accept 导致 intent type 为空从而崩溃
+                    if (android.text.TextUtils.isEmpty(intent.getType())) {
+                        intent.setType("*/*");
+                    }
+
+                    fragment.start(intent, uris -> filePathCallback.onReceiveValue(uris));
+                    return true;
+                } else {
+                    Log.e(TAG, "WebView: Cannot find Activity context! context=" + context);
+                    filePathCallback.onReceiveValue(null);
+                }
+                return false;
+            }
+
+            // For Android 4.1+（旧版兼容入口）
+            public void openFileChooser(ValueCallback<Uri> uploadMsg, String acceptType, String capture) {
+                Log.d(TAG, "WebView: openFileChooser triggered");
+                Context context = getInstance() != null ? getInstance().getContext() : mWebView.getContext();
+                android.app.Activity activity = getActivityFromContext(context);
+                if (activity != null) {
+                    Log.d(TAG, "WebView: Found Activity for openFileChooser");
+                    FileChooserFragment fragment = new FileChooserFragment();
+                    activity.getFragmentManager().beginTransaction().add(fragment, "fileChooser").commitAllowingStateLoss();
+                    activity.getFragmentManager().executePendingTransactions();
+
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+                    intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+                    intent.setType(TextUtils.isEmpty(acceptType) ? "*/*" : acceptType);
+
+                    fragment.start(intent, uris -> uploadMsg.onReceiveValue(uris != null && uris.length > 0 ? uris[0] : null));
+                } else {
+                    Log.e(TAG, "WebView: Cannot find Activity context for openFileChooser!");
+                    uploadMsg.onReceiveValue(null);
+                }
             }
         });
 

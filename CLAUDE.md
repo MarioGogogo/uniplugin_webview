@@ -13,10 +13,12 @@ WebView 原生插件，包含 **WebView 组件** 和 **WebView 模块** 两部�
 | 属性 | 值 |
 |------|-----|
 | **命名空间** | `uni.dcloud.io.uniplugin_webview` |
-| **编译 SDK** | 29 |
-| **最低 SDK** | 16 |
-| **目标 SDK** | 28 |
+| **编译 SDK** | 33 |
+| **最低 SDK** | 22 |
+| **目标 SDK** | 33 |
 | **模块类型** | `com.android.library` |
+
+> 本分支（`feature/webview-pool-optimization`）**未集成 X5 内核**，仅提供系统 WebView。无 `X5WebViewComponent` / `X5WebViewModule`，`build.gradle` 也无 `webview-x5-release.aar` 依赖。
 
 ## 依赖关系
 
@@ -27,6 +29,8 @@ WebView 原生插件，包含 **WebView 组件** 和 **WebView 模块** 两部�
 
 ### Implementation
 - `com.alibaba:fastjson:1.2.83` - JSON 处理
+
+> **文件选择不依赖任何动态权限框架**：已移除 `XXPermissions` 与 `androidx.fragment`。H5 `<input type="file">` 通过系统 SAF（`Intent.ACTION_GET_CONTENT`）拉起选择器，`content://` Uri 由系统授予临时 URI 权限，无需申请 `READ_MEDIA_*` / `READ_EXTERNAL_STORAGE`。
 
 ---
 
@@ -243,6 +247,28 @@ window.receiveFromApp = function(data) {
 
 ---
 
+## 文件选择（H5 文件上传）
+
+当 H5 页面点击 `<input type="file">` 时，`WebChromeClient.onShowFileChooser` 被触发，由无 UI 的代理 Fragment `FileChooserFragment` 负责调起系统选择器并接收结果。
+
+**路径**: `src/main/java/uni/dcloud/io/uniplugin_webview/FileChooserFragment.java`
+
+**方案核心**：使用 `android.app.Fragment`（非 androidx）+ `startActivityForResult`，直接拉起系统 SAF 选择器。
+
+| 要点 | 说明 |
+|---|---|
+| 无需存储/相册权限 | `content://` Uri 由系统授予临时 URI 权限，**不需要** `READ_MEDIA_*` / `READ_EXTERNAL_STORAGE` |
+| Intent 来源 | 优先 `fileChooserParams.createIntent()`；失败则回退 `ACTION_GET_CONTENT` + `CATEGORY_OPENABLE` |
+| 类型空保护 | 若 `intent.getType()` 为空（H5 未指定 `accept`），兜底 `intent.setType("*/*")` 防崩溃 |
+| 多选支持 | `onActivityResult` 同时处理 `getDataString()` 单选与 `getClipData()` 多选 |
+| 旧版兼容 | 保留 `openFileChooser(...)` 入口（Android 4.1+），同样走 SAF |
+
+**Activity 解析**：`WebViewComponent` 内的 `getActivityFromContext(Context)` 递归穿透 `ContextWrapper` 解析出宿主 `android.app.Activity`，再用 `activity.getFragmentManager()` 挂载 Fragment。
+
+> ⚠️ 该方案与 `feat/x5-integration-02` 分支的系统 WebView 文件选择实现一致；区别仅在于本分支无 X5 组件，故无 `X5WebViewComponent` 对应逻辑。
+
+---
+
 ## Deep Link 处理
 
 `shouldOverrideUrlLoading` 按 URL scheme 分类处理，防止 `baiduboxapp://` 等自定义协议导致加载失败：
@@ -308,3 +334,6 @@ window.receiveFromApp = function(data) {
 | `AndroidManifest.xml` | 模块清单 |
 | `WebViewModule.java` | 全局模块 API 入口 |
 | `WebViewComponent.java` | 组件 API 入口（核心文件） |
+| `FileChooserFragment.java` | H5 文件选择代理 Fragment（无权限 SAF 方案） |
+| `WebViewPool.java` | WebView 对象池（本分支特有） |
+| `WarmUpManager.java` | WebView 预热管理（本分支特有） |

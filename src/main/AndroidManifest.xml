@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+        文件上传（H5 <input type="file">）通过系统 SAF 选择器拉起，
+        content:// Uri 由系统授予临时 URI 权限，因此【无需】声明
+        READ_EXTERNAL_STORAGE / READ_MEDIA_* / CAMERA 等存储与相册权限。
+    -->
     <application>
         <!-- WebView 插件不需要额外声明 Activity -->
     </application>
